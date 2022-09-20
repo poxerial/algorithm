@@ -11,12 +11,14 @@ template <class T> class RedBlackTreeNode {
   T val;
 
   friend class RedBlackTree<T>;
+  friend void validate_rb_tree(RedBlackTree<int> tree);
 
   RedBlackTreeNode(T _val, RedBlackTreeNode *_parent)
       : val(_val), left(nullptr), right(nullptr), color(_parent ? red : black),
         parent(_parent) {}
 
   bool is_root() { return this->parent == nullptr; }
+  bool is_leaf() { return this->right == nullptr && this->left == nullptr; }
 
   void leaf_insert(T _val, SubBranch b) {
     assert(this->sub_node(b) == nullptr);
@@ -46,6 +48,10 @@ template <class T> class RedBlackTreeNode {
     return this == this->parent->left ? left_branch : right_branch;
   }
 
+  static SubBranch reverse_branch(SubBranch b) {
+    return b == right_branch ? left_branch : right_branch;
+  }
+
   RedBlackTreeNode *brother() {
     if (this->parent != nullptr) {
       return this->parent->left == this ? this->parent->right
@@ -54,35 +60,35 @@ template <class T> class RedBlackTreeNode {
     return nullptr;
   }
 
-  void right_rotate_default(RedBlackTreeNode *this_right,
-                            RedBlackTreeNode *this_left) {
-    assert(this_left != nullptr);
-
-    std::swap(this->val, this_left->val);
-    std::swap(this_left, this_right);
-    std::swap(this_left, this_right->left);
-    std::swap(this_right->left, this_right->right);
-  }
-
-  void right_rotate() { right_rotate_default(this->right, this->left); }
-
-  void left_rotate() { right_rotate_default(this->left, this->right); }
-
   void rotate(SubBranch b) {
-    if (b == right_branch) {
-      right_rotate();
-    } else {
-      left_rotate();
+    auto rb = reverse_branch(b);
+    auto node_new_parent = this->sub_node(rb);
+    assert(node_new_parent != nullptr);
+
+    // change the parent of related node
+    auto node_1 = node_new_parent->sub_node(rb);
+    if (node_1) {
+      node_1->parent = this;
     }
+    auto node_2 = this->sub_node(b);
+    if (node_2) {
+      node_2->parent = node_new_parent;
+    }
+
+    std::swap(this->val, node_new_parent->val);
+    if (b == right_branch) {
+      std::swap(this->right, node_new_parent->left);
+    } else {
+      std::swap(this->left, node_new_parent->right);
+    }
+    std::swap(node_new_parent->left, node_new_parent->right);
+    std::swap(this->left, this->right);
   }
 
-  /**
-   * @brief Return the pointer to the first element equal to `val`.
-   * If there is no such element in the subtree, return `nullptr`.
-   *
-   * @param val
-   * @return T*
-   */
+  void right_rotate() { rotate(right_branch); }
+
+  void left_rotate() { rotate(left_branch); }
+
   RedBlackTreeNode *search(T val) {
     if (val == this->val)
       return this;
@@ -118,7 +124,7 @@ template <class T> class RedBlackTreeNode {
         destination->sub_node(sub_branch)->insert_fixup();
         return;
       } else {
-        destination = destination->left;
+        destination = destination->sub_node(sub_branch);
       }
     }
   }
@@ -134,22 +140,59 @@ template <class T> class RedBlackTreeNode {
         parent_inserted->parent->color = red;
         temp = parent_inserted->parent;
       } else {
-        if (parent_inserted->branch() != parent_inserted->parent->branch()) {
-          temp->parent->rotate(temp->branch() == right_branch ? left_branch
-                                                              : right_branch);
+        if (parent_inserted->branch() != this->branch()) {
+          temp->parent->rotate(reverse_branch(temp->branch()));
         }
-        temp->parent->rotate(temp->branch() == right_branch ? left_branch
-                                                            : right_branch);
+        parent_inserted->parent->rotate(reverse_branch(temp->branch()));
         temp->parent->color = black;
         temp->brother()->color = red;
       }
     }
   }
+
+  template<typename F>
+  concept Tranversable = requires(F f, RedBlackTreeNode *node) {
+    {f(node)}->bool;
+  };
+
+  template<class tranverse_func_t>
+  void tranverse(tranverse_func_t pre_order, tranverse_func_t in_order,
+                 tranverse_func_t post_order) {
+    if (!pre_order(this)) {
+      return;
+    }
+
+    if (this->left)
+      this->left->tranverse(pre_order, in_order, post_order);
+
+    if (!in_order(this)) {
+      return;
+    }
+
+    if (this->right)
+      this->right->tranverse(pre_order, in_order, post_order);
+
+    if (!post_order(this)) {
+      return;
+    }
+  }
+
+  int black_height() {
+    int bh = 0;
+    tranverse([&](RedBlackTreeNode *node)->bool{
+      if (node->color == black)
+        bh++;
+      if (node->is_leaf())
+        return false;
+      return true;
+    }, []{}, []{});
+    return bh;
+  }
 };
 
 template <class T> class RedBlackTree {
+  friend void validate_rb_tree(RedBlackTree<int> tree);
 
-public:
   using Node = RedBlackTreeNode<T>;
   using Color = typename Node::Color;
   using SubBranch = typename Node::SubBranch;
@@ -183,20 +226,28 @@ public:
         node->parent->color = Color::red;
         bro->color = Color::black;
         node->parent->rotate(node->branch());
-      } 
+      }
       if (Node::color_of(bro->right) == Color::black &&
-                 Node::color_of(bro->left) == Color::black) {
+          Node::color_of(bro->left) == Color::black) {
         bro->color = Color::red;
         node = node->parent;
       } else {
-        if (Node::color_of(bro->sub_branch()))
+        if (Node::color_of(bro->sub_node(
+                Node::reverse_branch(node->branch()))) == Color::black) {
+          bro->rotate(Node::reverse_branch(node->branch()));
+        }
       }
-        
-      }
-    node->color = Color::black;
     }
+    node->color = Color::black;
+  }
 
 public:
+  bool empty() { return root == nullptr; }
+
+  int black_height() {
+    return root ? root->black_height : -1;
+  }
+
   RedBlackTree() : root(nullptr) {}
   void del(Node *node) {
     if (!node) {
@@ -219,11 +270,11 @@ public:
     }
   }
 
+  void tranverse(void (*preorder)(T), void (*inorder)(T),
+                 void (*postorder)(T)) {
+    auto temp = root;
+    std::stack<Node *> s;
+  }
+
   Node *search(T _val) { return root->search(_val); }
 };
-
-int main() {
-  RedBlackTree<int> tree;
-  tree.insert(3);
-  tree.del(tree.search(3));
-}
