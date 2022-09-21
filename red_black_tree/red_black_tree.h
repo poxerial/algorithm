@@ -1,5 +1,7 @@
 #include <bits/stdc++.h>
 
+namespace algorithm {
+
 template <class T> class RedBlackTreeNode;
 template <class T> class RedBlackTree;
 
@@ -11,7 +13,7 @@ template <class T> class RedBlackTreeNode {
   T val;
 
   friend class RedBlackTree<T>;
-  friend void validate_rb_tree(RedBlackTree<int> tree);
+  friend void validate_rb_tree(RedBlackTree<int> &tree);
 
   RedBlackTreeNode(T _val, RedBlackTreeNode *_parent)
       : val(_val), left(nullptr), right(nullptr), color(_parent ? red : black),
@@ -150,14 +152,12 @@ template <class T> class RedBlackTreeNode {
     }
   }
 
-  template<typename F>
-  concept Tranversable = requires(F f, RedBlackTreeNode *node) {
-    {f(node)}->bool;
-  };
+  static constexpr auto do_nothing_tranverse =
+      [](RedBlackTreeNode *node) -> bool { return true; };
+  using tranversable_t = decltype(std::function(do_nothing_tranverse));
 
-  template<class tranverse_func_t>
-  void tranverse(tranverse_func_t pre_order, tranverse_func_t in_order,
-                 tranverse_func_t post_order) {
+  void tranverse(tranversable_t pre_order, tranversable_t in_order,
+                 tranversable_t post_order) {
     if (!pre_order(this)) {
       return;
     }
@@ -179,19 +179,21 @@ template <class T> class RedBlackTreeNode {
 
   int black_height() {
     int bh = 0;
-    tranverse([&](RedBlackTreeNode *node)->bool{
-      if (node->color == black)
-        bh++;
-      if (node->is_leaf())
-        return false;
-      return true;
-    }, []{}, []{});
+    tranverse(
+        [&](RedBlackTreeNode *node) -> bool {
+          if (node->color == black)
+            bh++;
+          if (node->is_leaf())
+            return false;
+          return true;
+        },
+        do_nothing_tranverse, do_nothing_tranverse);
     return bh;
   }
 };
 
 template <class T> class RedBlackTree {
-  friend void validate_rb_tree(RedBlackTree<int> tree);
+  friend void validate_rb_tree(RedBlackTree<int>& tree);
 
   using Node = RedBlackTreeNode<T>;
   using Color = typename Node::Color;
@@ -244,9 +246,7 @@ template <class T> class RedBlackTree {
 public:
   bool empty() { return root == nullptr; }
 
-  int black_height() {
-    return root ? root->black_height : -1;
-  }
+  int black_height() { return root ? root->black_height() : -1; }
 
   RedBlackTree() : root(nullptr) {}
   void del(Node *node) {
@@ -278,3 +278,5 @@ public:
 
   Node *search(T _val) { return root->search(_val); }
 };
+
+} // namespace algorithm

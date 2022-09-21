@@ -1,10 +1,12 @@
 #include "red_black_tree.h"
 #include <limits>
 
+namespace algorithm {
+
 using Tree = RedBlackTree<int>;
 using Node = RedBlackTreeNode<int>;
 
-void validate_rb_tree(Tree tree) {
+void validate_rb_tree(Tree &tree) {
     using Color = typename Node::Color;
     using SubBranch = typename Node::SubBranch;
     if (tree.empty()) {
@@ -13,7 +15,7 @@ void validate_rb_tree(Tree tree) {
 
     bool status = true;
 
-    auto pre = [&](RedBlackTreeNode<int> *curr)->void {
+    auto pre = [&](RedBlackTreeNode<int> *curr)->bool{
         if (curr->is_root()) {
             assert(curr->color != Color::black);
         } else {
@@ -25,20 +27,20 @@ void validate_rb_tree(Tree tree) {
             assert(curr == curr->parent->right || curr == curr->parent->left);
             assert(curr->color != Color::red || curr->parent->color != Color::red);
         }
-        return;
+        return true;
     };
 
 
-    tree.root->tranverse(pre);
+    tree.root->tranverse(pre, Node::do_nothing_tranverse, Node::do_nothing_tranverse);
+}
+
 }
 
 int main() {
-  RedBlackTree<int> tree;
+  algorithm::RedBlackTree<int> tree;
 
-  for (;;) {
-    int a;
-    std::cin>>a;
-    tree.insert(a);
-    std::cout<<tree.black_height()<<std::endl;
-  }
+    for (int i = 0; i < 7; i++) {
+        tree.insert(i);
+        std::cout<< i << "inserted." << std::endl;
+    }
 }
