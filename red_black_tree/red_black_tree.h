@@ -1,4 +1,9 @@
-#include <bits/stdc++.h>
+#ifndef ALGORITHM_RED_BLACK_TREE_H_
+#define ALGORITHM_RED_BLACK_TREE_H_
+
+#include <cassert>
+#include <functional>
+#include <ostream>
 
 namespace algorithm {
 
@@ -14,6 +19,7 @@ template <class T> class RedBlackTreeNode {
 
   friend class RedBlackTree<T>;
   friend void validate_rb_tree(RedBlackTree<int> &tree);
+  friend void operator<<(std::ostream &, const RedBlackTree<int> &);
 
   RedBlackTreeNode(T _val, RedBlackTreeNode *_parent)
       : val(_val), left(nullptr), right(nullptr), color(_parent ? red : black),
@@ -56,8 +62,9 @@ template <class T> class RedBlackTreeNode {
 
   RedBlackTreeNode *brother() {
     if (this->parent != nullptr) {
-      return this->parent->left == this ? this->parent->right
-                                        : this->parent->left;
+      auto rst =
+          this->parent->left == this ? this->parent->right : this->parent->left;
+      return rst;
     }
     return nullptr;
   }
@@ -78,6 +85,7 @@ template <class T> class RedBlackTreeNode {
     }
 
     std::swap(this->val, node_new_parent->val);
+    std::swap(this->color, node_new_parent->color);
     if (b == right_branch) {
       std::swap(this->right, node_new_parent->left);
     } else {
@@ -135,14 +143,14 @@ template <class T> class RedBlackTreeNode {
     auto temp = this;
     while (color_of(temp->parent) == red) {
       RedBlackTreeNode *parent_inserted = temp->parent;
-      RedBlackTreeNode *parent_bro = parent->brother();
+      RedBlackTreeNode *parent_bro = parent_inserted->brother();
       if (color_of(parent_bro) == red) {
         parent_inserted->color = black;
         parent_bro->color = black;
         parent_inserted->parent->color = red;
         temp = parent_inserted->parent;
       } else {
-        if (parent_inserted->branch() != this->branch()) {
+        if (parent_inserted->branch() != temp->branch()) {
           temp->parent->rotate(reverse_branch(temp->branch()));
         }
         parent_inserted->parent->rotate(reverse_branch(temp->branch()));
@@ -152,9 +160,9 @@ template <class T> class RedBlackTreeNode {
     }
   }
 
-  static constexpr auto do_nothing_tranverse =
-      [](RedBlackTreeNode *node) -> bool { return true; };
-  using tranversable_t = decltype(std::function(do_nothing_tranverse));
+  static bool do_nothing_tranverse(RedBlackTreeNode *node) { return true; };
+  using tranversable_t = decltype(
+      std::function<decltype(do_nothing_tranverse)>(do_nothing_tranverse));
 
   void tranverse(tranversable_t pre_order, tranversable_t in_order,
                  tranversable_t post_order) {
@@ -179,21 +187,19 @@ template <class T> class RedBlackTreeNode {
 
   int black_height() {
     int bh = 0;
-    tranverse(
-        [&](RedBlackTreeNode *node) -> bool {
-          if (node->color == black)
-            bh++;
-          if (node->is_leaf())
-            return false;
-          return true;
-        },
-        do_nothing_tranverse, do_nothing_tranverse);
+    auto temp = this;
+    while (temp) {
+      if (temp->color == black)
+        bh++;
+      temp = temp->left;
+    }
+
     return bh;
   }
 };
 
 template <class T> class RedBlackTree {
-  friend void validate_rb_tree(RedBlackTree<int>& tree);
+  friend void validate_rb_tree(RedBlackTree<int> &tree);
 
   using Node = RedBlackTreeNode<T>;
   using Color = typename Node::Color;
@@ -201,8 +207,14 @@ template <class T> class RedBlackTree {
   Node *root;
 
   void substitute(Node *old, Node *next) {
+    bool next_fake = false;
     if (next) {
       next->parent = old->parent;
+    } else {
+      auto temp = Node(0, old->parent);
+      next_fake = true;
+      temp.color = Node::black;
+      next = &temp;
     }
     if (old->is_root()) {
       root = next;
@@ -216,39 +228,66 @@ template <class T> class RedBlackTree {
     if (old->color == Color::black) {
       del_fixup(next);
     }
+
+    if (next_fake) {
+      if (next->is_root()) {
+        root = nullptr;
+      } else if (next->branch() == Node::right_branch) {
+        next->parent->right = nullptr;
+      } else {
+        next->parent->left = nullptr;
+      }
+    }
+
     free(old);
   }
 
   void del_fixup(Node *node) {
-    while (node->color == Color::black && node->parent != nullptr) {
-      auto bro = node->brother();
-      auto branch = node->branch();
-      auto bro_branch = bro->branch();
-      if (Node::color_of(bro) == Color::red) {
+    while (node->color == Color::black && !node->is_root()) {
+      if (Node::color_of(node->brother()) == Color::red) {
         node->parent->color = Color::red;
-        bro->color = Color::black;
+        node->brother()->color = Color::black;
         node->parent->rotate(node->branch());
       }
-      if (Node::color_of(bro->right) == Color::black &&
-          Node::color_of(bro->left) == Color::black) {
-        bro->color = Color::red;
+      if (Node::color_of(node->brother()->right) == Color::black &&
+          Node::color_of(node->brother()->left) == Color::black) {
+        node->brother()->color = Color::red;
         node = node->parent;
       } else {
-        if (Node::color_of(bro->sub_node(
+        if (Node::color_of(node->brother()->sub_node(
                 Node::reverse_branch(node->branch()))) == Color::black) {
-          bro->rotate(Node::reverse_branch(node->branch()));
+          node->brother()->color = Node::red;
+          node->brother()->sub_node(node->branch())->color = Node::black;
+          node->brother()->rotate(Node::reverse_branch(node->branch()));
         }
+        node->brother()->sub_node(Node::reverse_branch(node->branch()))->color =
+            Color::black;
+        std::swap(node->parent->color, node->brother()->color);
+        node->parent->rotate(node->branch());
+        node = root;
       }
     }
     node->color = Color::black;
   }
 
+  friend void operator<<(std::ostream &, const RedBlackTree<int> &);
+
 public:
+  RedBlackTree() : root(nullptr) {}
+  ~RedBlackTree() {
+    if (root) {
+      root->tranverse(Node::do_nothing_tranverse, Node::do_nothing_tranverse,
+                      [](Node *node) {
+                        delete (node);
+                        return true;
+                      });
+    }
+  }
+
   bool empty() { return root == nullptr; }
 
   int black_height() { return root ? root->black_height() : -1; }
 
-  RedBlackTree() : root(nullptr) {}
   void del(Node *node) {
     if (!node) {
       return;
@@ -265,18 +304,30 @@ public:
   void insert(T val) {
     if (root) {
       root->insert(val);
+      root->color = Color::black;
     } else {
       root = new Node(val, nullptr);
     }
   }
 
-  void tranverse(void (*preorder)(T), void (*inorder)(T),
-                 void (*postorder)(T)) {
-    auto temp = root;
-    std::stack<Node *> s;
+  void del(T val) {
+    auto node = search(val);
+    del(node);
+  }
+
+  using tranversable_t = std::function<bool(const T &)>;
+  void tranverse(tranversable_t pre_order, tranversable_t in_order,
+                 tranversable_t post_order) {
+    if (root) {
+      root->tranverse([&](Node *node) { return pre_order(node->val); },
+                      [&](Node *node) { return in_order(node->val); },
+                      [&](Node *node) { return post_order(node->val); });
+    }
   }
 
   Node *search(T _val) { return root->search(_val); }
 };
 
 } // namespace algorithm
+
+#endif
