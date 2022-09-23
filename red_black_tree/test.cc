@@ -134,6 +134,7 @@ void random_tree_sequence_delete_test() {
   int i = 0;
   for (auto elm : set) {
     tree.del(elm);
+    i++;
     if (i % 100 == 0) {
       algorithm::validate_rb_tree(tree);
     }

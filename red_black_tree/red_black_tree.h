@@ -239,7 +239,7 @@ template <class T> class RedBlackTree {
       }
     }
 
-    free(old);
+    delete(old);
   }
 
   void del_fixup(Node *node) {
